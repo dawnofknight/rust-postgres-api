@@ -17,6 +17,8 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
   const [maxTimeSeconds, setMaxTimeSeconds] = useState<number | undefined>(30);
   const [followPagination, setFollowPagination] = useState(true);
   const [maxPages, setMaxPages] = useState<number | undefined>(10);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,7 +29,9 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
       max_depth: maxDepth,
       max_time_seconds: maxTimeSeconds,
       follow_pagination: followPagination,
-      max_pages: maxPages
+      max_pages: maxPages,
+      date_from: dateFrom || undefined,
+      date_to: dateTo || undefined
     };
     
     onSubmit(request);
@@ -120,6 +124,35 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
             }
             label="Follow Pagination Links"
           />
+        </Box>
+
+        {/* Date Range Filter */}
+        <Box>
+          <Typography variant="h6" gutterBottom sx={{ mt: 2, mb: 1 }}>
+            Date Range Filter (Optional)
+          </Typography>
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 2 }}>
+            <TextField
+              label="From Date"
+              type="date"
+              value={dateFrom}
+              onChange={(e) => setDateFrom(e.target.value)}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              helperText="Filter pages from this date"
+            />
+            <TextField
+              label="To Date"
+              type="date"
+              value={dateTo}
+              onChange={(e) => setDateTo(e.target.value)}
+              InputLabelProps={{
+                shrink: true,
+              }}
+              helperText="Filter pages until this date"
+            />
+          </Box>
         </Box>
 
         <Box sx={{ mt: 2 }}>

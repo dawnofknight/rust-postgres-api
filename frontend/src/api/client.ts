@@ -11,6 +11,8 @@ export interface CrawlRequest {
   max_time_seconds?: number;
   follow_pagination?: boolean;
   max_pages?: number;
+  date_from?: string; // ISO 8601 date string (YYYY-MM-DD)
+  date_to?: string;   // ISO 8601 date string (YYYY-MM-DD)
 }
 
 export interface KeywordMatch {
@@ -19,12 +21,15 @@ export interface KeywordMatch {
   cleaned_text: string;
   count: number;
   relevance_score?: number;
+  source_url: string; // URL where this keyword match was found
 }
 
 export interface CrawlMetadata {
   crawl_timestamp: string;
   total_processing_time_ms: number;
   content_summary?: string;
+  last_modified?: string; // ISO 8601 date string for page last modified date
+  published_date?: string; // ISO 8601 date string for page published date
 }
 
 export interface DomainResult {

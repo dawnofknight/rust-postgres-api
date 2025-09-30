@@ -3,13 +3,14 @@ import {
   Box, Typography, Paper, Accordion, AccordionSummary, 
   AccordionDetails, Chip, LinearProgress, Button,
   FormControl, InputLabel, Select, MenuItem, OutlinedInput,
-  Card, CardContent, Divider, Badge
+  Card, CardContent, Divider, Badge, Link
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import DownloadIcon from '@mui/icons-material/Download';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import LabelIcon from '@mui/icons-material/Label';
+import LinkIcon from '@mui/icons-material/Link';
 import type { CrawlResult, DomainResult, KeywordMatch } from '../api/client';
 
 interface CrawlerResultsProps {
@@ -215,9 +216,26 @@ export default function CrawlerResults({ result, onDownload }: CrawlerResultsPro
                 <Typography variant="h6" gutterBottom>
                   Domain {domainIndex + 1}
                 </Typography>
-                <Typography variant="subtitle1">
-                  <strong>URL:</strong> {domain.url}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <Typography variant="subtitle1">
+                    <strong>URL:</strong>
+                  </Typography>
+                  <Link 
+                    href={domain.url} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 0.5,
+                      textDecoration: 'none',
+                      '&:hover': { textDecoration: 'underline' }
+                    }}
+                  >
+                    <LinkIcon fontSize="small" />
+                    {domain.url}
+                  </Link>
+                </Box>
                 {domain.title && (
                   <Typography variant="subtitle1">
                     <strong>Title:</strong> {domain.title}
@@ -316,6 +334,26 @@ export default function CrawlerResults({ result, onDownload }: CrawlerResultsPro
                       </Box>
                     </AccordionSummary>
                     <AccordionDetails>
+                      <Typography variant="subtitle2" gutterBottom>Source URL:</Typography>
+                      <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.100', mb: 2 }}>
+                        <Link 
+                          href={match.source_url} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          sx={{ 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            textDecoration: 'none',
+                            '&:hover': { textDecoration: 'underline' }
+                          }}
+                        >
+                          <LinkIcon sx={{ mr: 1, fontSize: 16 }} />
+                          <Typography variant="body2" sx={{ wordBreak: 'break-all' }}>
+                            {match.source_url}
+                          </Typography>
+                        </Link>
+                      </Paper>
+                      
                       <Typography variant="subtitle2" gutterBottom>Context:</Typography>
                       <Paper elevation={0} sx={{ p: 2, bgcolor: 'grey.100', mb: 2 }}>
                         <Typography variant="body2" component="pre" sx={{ whiteSpace: 'pre-wrap' }}>
