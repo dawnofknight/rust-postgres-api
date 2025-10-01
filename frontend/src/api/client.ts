@@ -13,6 +13,7 @@ export interface CrawlRequest {
   max_pages?: number;
   date_from?: string; // ISO 8601 date string (YYYY-MM-DD)
   date_to?: string;   // ISO 8601 date string (YYYY-MM-DD)
+  include_subdomains?: boolean; // Whether to crawl subdomains of the main domain
 }
 
 export interface KeywordMatch {

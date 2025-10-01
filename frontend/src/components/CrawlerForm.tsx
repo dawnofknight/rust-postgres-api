@@ -19,6 +19,7 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
   const [maxPages, setMaxPages] = useState<number | undefined>(10);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [includeSubdomains, setIncludeSubdomains] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +32,8 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
       follow_pagination: followPagination,
       max_pages: maxPages,
       date_from: dateFrom || undefined,
-      date_to: dateTo || undefined
+      date_to: dateTo || undefined,
+      include_subdomains: includeSubdomains
     };
     
     onSubmit(request);
@@ -123,6 +125,19 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
               />
             }
             label="Follow Pagination Links"
+          />
+        </Box>
+
+        <Box>
+          <FormControlLabel
+            control={
+              <Checkbox
+                checked={includeSubdomains}
+                onChange={(e) => setIncludeSubdomains(e.target.checked)}
+                color="primary"
+              />
+            }
+            label="Include Subdomains"
           />
         </Box>
 
