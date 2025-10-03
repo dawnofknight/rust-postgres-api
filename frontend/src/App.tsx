@@ -1,6 +1,7 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { AppBar, Toolbar, Typography, Box, CssBaseline, ThemeProvider, createTheme } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { AppBar, Toolbar, Typography, Box, CssBaseline, ThemeProvider, createTheme, Button } from '@mui/material';
 import CrawlerPage from './pages/CrawlerPage';
+import SocialCrawlerPage from './pages/SocialCrawlerPage';
 
 const theme = createTheme({
   palette: {
@@ -29,6 +30,10 @@ function App() {
               <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
                 Web Crawler
               </Typography>
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button color="inherit" component={Link} to="/">Web</Button>
+                <Button color="inherit" component={Link} to="/social">Social</Button>
+              </Box>
             </Toolbar>
           </AppBar>
           
@@ -37,6 +42,7 @@ function App() {
           >
             <Routes>
               <Route path="/" element={<CrawlerPage />} />
+              <Route path="/social" element={<SocialCrawlerPage />} />
             </Routes>
           </Box>
         </Box>

@@ -65,6 +65,34 @@ export const crawlerApi = {
   }
 };
 
+// API client for social media proxies
+export const socialApi = {
+  tikhubTwitter: async (path: string, params?: Record<string, unknown>, method: 'GET' | 'POST' = 'GET') => {
+    const response = await axios.post(`${API_URL}/social/tikhub/twitter`, { path, params, method });
+    return response.data;
+  },
+  tikhubTiktok: async (path: string, params?: Record<string, unknown>, method: 'GET' | 'POST' = 'GET') => {
+    const response = await axios.post(`${API_URL}/social/tikhub/tiktok`, { path, params, method });
+    return response.data;
+  },
+  tikhubGeneric: async (service: string, path: string, params?: Record<string, unknown>, method: 'GET' | 'POST' = 'GET') => {
+    const response = await axios.post(`${API_URL}/social/tikhub/generic`, { service, path, params, method });
+    return response.data;
+  },
+  rapidInstagram: async (path: string, params?: Record<string, unknown>, method: 'GET' | 'POST' = 'GET') => {
+    const response = await axios.post(`${API_URL}/social/rapidapi/instagram`, { path, params, method });
+    return response.data;
+  },
+  rapidTwitterV24: async (path: string, params?: Record<string, unknown>, method: 'GET' | 'POST' = 'GET') => {
+    const response = await axios.post(`${API_URL}/social/rapidapi/twitter-v24`, { path, params, method });
+    return response.data;
+  },
+  rapidGeneric: async (host: string, path: string, params?: Record<string, unknown>, method: 'GET' | 'POST' = 'GET') => {
+    const response = await axios.post(`${API_URL}/social/rapidapi/generic`, { host, path, params, method });
+    return response.data;
+  },
+};
+
 // API client for health check
 export const healthApi = {
   checkHealth: async (): Promise<{ status: string }> => {
