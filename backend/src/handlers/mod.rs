@@ -4,8 +4,6 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use sqlx::PgPool;
-
 use crate::models::{ApiError, ApiResponse, CreateUserRequest, UpdateUserRequest, User};
 
 mod crawler;
@@ -24,124 +22,39 @@ pub async fn health_check() -> impl IntoResponse {
     (StatusCode::OK, "API is running")
 }
 
-pub async fn get_users(State(pool): State<PgPool>) -> impl IntoResponse {
-    match sqlx::query_as::<_, User>("SELECT * FROM users")
-        .fetch_all(&pool)
-        .await
-    {
-        Ok(users) => (
-            StatusCode::OK,
-            Json(ApiResponse::success(users)),
-        ),
-        Err(e) => handle_error(ApiError::from(e)),
-    }
-}
-
-pub async fn get_user_by_id(
-    State(pool): State<PgPool>,
-    Path(id): Path<i32>,
-) -> impl IntoResponse {
-    match sqlx::query_as::<_, User>("SELECT * FROM users WHERE id = $1")
-        .bind(id)
-        .fetch_one(&pool)
-        .await
-    {
-        Ok(user) => (
-            StatusCode::OK,
-            Json(ApiResponse::success(user)),
-        ),
-        Err(e) => handle_error(ApiError::from(e)),
-    }
-}
-
-pub async fn create_user(
-    State(pool): State<PgPool>,
-    Json(payload): Json<CreateUserRequest>,
-) -> impl IntoResponse {
-    match sqlx::query_as::<_, User>(
-        "INSERT INTO users (name, email) VALUES ($1, $2) RETURNING *",
+pub async fn get_users() -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(ApiResponse::<Vec<User>>::error("Users endpoint disabled during Cassandra migration")),
     )
-    .bind(&payload.name)
-    .bind(&payload.email)
-    .fetch_one(&pool)
-    .await
-    {
-        Ok(user) => (
-            StatusCode::CREATED,
-            Json(ApiResponse::success(user)),
-        ),
-        Err(e) => handle_error(ApiError::from(e)),
-    }
 }
 
-pub async fn update_user(
-    State(pool): State<PgPool>,
-    Path(id): Path<i32>,
-    Json(payload): Json<UpdateUserRequest>,
-) -> impl IntoResponse {
-    // First check if user exists
-    let user_exists = sqlx::query_scalar::<_, bool>("SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)")
-        .bind(id)
-        .fetch_one(&pool)
-        .await;
-
-    if let Ok(false) | Err(_) = user_exists {
-        return handle_error(ApiError::NotFound(format!("User with id {} not found", id)));
-    }
-
-    // Build dynamic update query
-    let mut query = String::from("UPDATE users SET updated_at = NOW()");
-    let mut bindings = vec![];
-
-    if let Some(name) = &payload.name {
-        query.push_str(", name = $1");
-        bindings.push(name);
-    }
-
-    if let Some(email) = &payload.email {
-        if bindings.is_empty() {
-            query.push_str(", email = $1");
-        } else {
-            query.push_str(", email = $2");
-        }
-        bindings.push(email);
-    }
-
-    query.push_str(&format!(" WHERE id = ${} RETURNING *", bindings.len() + 1));
-
-    // Build and execute the query
-    let mut db_query = sqlx::query_as::<_, User>(&query);
-    
-    for binding in bindings {
-        db_query = db_query.bind(binding);
-    }
-    
-    db_query = db_query.bind(id);
-
-    match db_query.fetch_one(&pool).await {
-        Ok(user) => (
-            StatusCode::OK,
-            Json(ApiResponse::success(user)),
-        ),
-        Err(e) => handle_error(ApiError::from(e)),
-    }
+pub async fn get_user_by_id(Path(_id): Path<i32>) -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(ApiResponse::<User>::error("Users endpoint disabled during Cassandra migration")),
+    )
 }
 
-pub async fn delete_user(
-    State(pool): State<PgPool>,
-    Path(id): Path<i32>,
-) -> impl IntoResponse {
-    match sqlx::query_as::<_, User>("DELETE FROM users WHERE id = $1 RETURNING *")
-        .bind(id)
-        .fetch_one(&pool)
-        .await
-    {
-        Ok(user) => (
-            StatusCode::OK,
-            Json(ApiResponse::success(user)),
-        ),
-        Err(e) => handle_error(ApiError::from(e)),
-    }
+pub async fn create_user(Json(_payload): Json<CreateUserRequest>) -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(ApiResponse::<User>::error("Users endpoint disabled during Cassandra migration")),
+    )
+}
+
+pub async fn update_user(Path(_id): Path<i32>, Json(_payload): Json<UpdateUserRequest>) -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(ApiResponse::<User>::error("Users endpoint disabled during Cassandra migration")),
+    )
+}
+
+pub async fn delete_user(Path(_id): Path<i32>) -> impl IntoResponse {
+    (
+        StatusCode::NOT_IMPLEMENTED,
+        Json(ApiResponse::<User>::error("Users endpoint disabled during Cassandra migration")),
+    )
 }
 
 // Error handling function

@@ -1,26 +1,44 @@
 use axum::{
-    extract::Json,
+    extract::{Json, State},
     http::StatusCode,
     response::IntoResponse,
 };
-use serde_json::{json, Value};
-use crate::kafka::{create_producer, produce_json};
+use serde_json::json;
+use uuid::Uuid;
+use crate::db::CassandraState;
 
 use crate::crawler::{CrawlRequest, CrawlerError};
 
 pub async fn crawl_website(
+    State(state): State<CassandraState>,
     Json(request): Json<CrawlRequest>,
 ) -> impl IntoResponse {
     match crate::crawler::crawl_website(&request).await {
         Ok(result) => {
-            // Produce to Kafka topic if configured
-            if let (Ok(brokers), Ok(topic)) = (std::env::var("KAFKA_BROKERS"), std::env::var("KAFKA_TOPIC_CRAWL")) {
-                if let Ok(producer) = create_producer(&brokers) {
-                    let payload: Value = serde_json::to_value(&result).unwrap_or(json!({"error":"serialize"}));
-                    let _ = produce_json(&producer, &topic, None, &payload).await;
+            // Serialize and store the result directly into Cassandra
+            match serde_json::to_string(&result) {
+                Ok(payload) => {
+                    let id = Uuid::new_v4();
+                    let query = format!(
+                        "INSERT INTO {}.crawl_results (id, payload, created_at) VALUES (?, ?, toTimestamp(now()))",
+                        state.keyspace
+                    );
+                    if let Err(e) = state.session.query(query, (id, payload)).await {
+                        eprintln!("Failed to insert crawl result into Cassandra: {}", e);
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({"error": "Failed to persist crawl result"})),
+                        )
+                            .into_response();
+                    }
+                    (StatusCode::OK, Json(result)).into_response()
                 }
+                Err(e) => (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": format!("Serialization error: {}", e)})),
+                )
+                    .into_response(),
             }
-            (StatusCode::OK, Json(result)).into_response()
         },
         Err(err) => {
             let (status, error_message) = match &err {

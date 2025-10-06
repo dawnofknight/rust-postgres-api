@@ -18,8 +18,8 @@ async fn main() {
     // Load environment variables
     dotenv::dotenv().ok();
     
-    // Initialize database connection
-    let pool = db::init_db().await.expect("Failed to connect to database");
+    // Initialize Cassandra connection
+    let cassandra_state = db::init_db().await.expect("Failed to connect to Cassandra");
     
     // Setup CORS
     let cors = CorsLayer::new()
@@ -28,7 +28,7 @@ async fn main() {
         .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE]);
     
     // Build application with routes
-    let app = routes::create_routes(pool).layer(cors);
+    let app = routes::create_routes(cassandra_state).layer(cors);
     
     // Run the server
     let port = std::env::var("SERVER_PORT")

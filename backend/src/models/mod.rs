@@ -1,14 +1,13 @@
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use std::fmt;
 
-#[derive(Debug, Serialize, Deserialize, FromRow)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct User {
     pub id: i32,
     pub name: String,
     pub email: String,
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
-    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>, 
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -50,7 +49,7 @@ impl<T> ApiResponse<T> {
 
 #[derive(Debug)]
 pub enum ApiError {
-    DatabaseError(sqlx::Error),
+    DatabaseError(String),
     NotFound(String),
     ValidationError(String),
     InternalServerError(String),
@@ -66,12 +65,4 @@ impl fmt::Display for ApiError {
         }
     }
 }
-
-impl From<sqlx::Error> for ApiError {
-    fn from(error: sqlx::Error) -> Self {
-        match error {
-            sqlx::Error::RowNotFound => ApiError::NotFound("Resource not found".to_string()),
-            _ => ApiError::DatabaseError(error),
-        }
-    }
-}
+// Removed dependency on sqlx::Error; map external errors to ApiError manually where needed.

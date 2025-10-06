@@ -27,7 +27,7 @@ Backend service built with Rust, Axum, and PostgreSQL. It provides user CRUD, a 
 
 ```
 .
-├── migrations/             # Database migrations
+├── migrations/             # (Deprecated for PostgreSQL)
 ├── src/
 │   ├── config/             # Application configuration
 │   ├── db/                 # Database connection and utilities
@@ -45,7 +45,7 @@ Backend service built with Rust, Axum, and PostgreSQL. It provides user CRUD, a 
 ## Prerequisites
 
 - Rust (latest stable version) - for local development
-- PostgreSQL database - for local development
+- Cassandra/ScyllaDB - for local development
 - Docker and Docker Compose - for containerized deployment
 
 ## Setup
@@ -61,8 +61,9 @@ Backend service built with Rust, Axum, and PostgreSQL. It provides user CRUD, a 
 # Copy environment file
 cp .env.example .env
 
-# Edit .env file with your database credentials
-# DATABASE_URL=postgres://username:password@localhost:5432/database_name
+# Edit .env file with your Cassandra/Scylla settings
+# CASSANDRA_CONTACT_POINTS=127.0.0.1
+# CASSANDRA_KEYSPACE=scraper
 # SERVER_PORT=3000
 # TIKHUB_TOKEN=your_tikhub_token_here
 # RAPIDAPI_KEY=your_rapidapi_key_here
@@ -92,8 +93,8 @@ The application will be available at http://localhost:3000.
 #### Docker Notes
 
 - The application uses a multi-stage build process for smaller image size
-- The PostgreSQL database is automatically initialized with the required schema
-- Database data is persisted in a Docker volume
+- The Cassandra database is automatically initialized with the required keyspace/table at runtime
+- Data is persisted in a Docker volume (if configured)
 - The API container will automatically reconnect to the database if it's temporarily unavailable
 
 ## API Endpoints
@@ -101,11 +102,11 @@ The application will be available at http://localhost:3000.
 | Method | Endpoint                          | Description                                   |
 |--------|-----------------------------------|-----------------------------------------------|
 | GET    | `/health`                         | Health check                                  |
-| GET    | `/users`                          | Get all users                                 |
-| POST   | `/users`                          | Create a new user                             |
-| GET    | `/users/{id}`                     | Get user by ID                                |
-| PUT    | `/users/{id}`                     | Update user by ID                             |
-| DELETE | `/users/{id}`                     | Delete user by ID                             |
+| GET    | `/users`                          | Disabled during Cassandra migration           |
+| POST   | `/users`                          | Disabled during Cassandra migration           |
+| GET    | `/users/{id}`                     | Disabled during Cassandra migration           |
+| PUT    | `/users/{id}`                     | Disabled during Cassandra migration           |
+| DELETE | `/users/{id}`                     | Disabled during Cassandra migration           |
 | POST   | `/crawl`                          | Crawl websites and extract keyword contexts   |
 | POST   | `/social/tikhub/generic`          | Proxy for TikHub generic services             |
 | POST   | `/social/tikhub/twitter`          | Proxy for TikHub Twitter (web)                |

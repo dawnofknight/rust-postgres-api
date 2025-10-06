@@ -26,10 +26,10 @@ WORKDIR /app
 # Copy the binary and migrations from builder
 COPY --from=builder /usr/src/app/target/release/rust-postgres-api /app/
 COPY --from=builder /usr/src/app/migrations /app/migrations/
-COPY --from=builder /usr/src/app/.env.example /app/.env
+# Environment is provided via container runtime; no static .env copied
 
 # Expose the API port
-EXPOSE 8080
+EXPOSE 3000
 
 # Set the binary as the entrypoint
 ENTRYPOINT ["/app/rust-postgres-api"]
