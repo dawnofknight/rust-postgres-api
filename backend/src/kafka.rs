@@ -1,6 +1,6 @@
 use rdkafka::config::ClientConfig;
 use rdkafka::producer::{FutureProducer, FutureRecord};
-use rdkafka::error::KafkaError;
+use rdkafka::error::{KafkaError, RDKafkaErrorCode};
 use serde_json::Value;
 
 pub fn create_producer(brokers: &str) -> Result<FutureProducer, KafkaError> {
@@ -16,7 +16,8 @@ pub async fn produce_json(
     key: Option<&str>,
     payload: &Value,
 ) -> Result<(), KafkaError> {
-    let payload_str = serde_json::to_string(payload).map_err(|_| KafkaError::MessageProduction("serialize".into()))?;
+    let payload_str = serde_json::to_string(payload)
+        .map_err(|_| KafkaError::MessageProduction(RDKafkaErrorCode::InvalidMessage))?;
     let record = FutureRecord::to(topic)
         .payload(&payload_str)
         .key(key.unwrap_or(""));
