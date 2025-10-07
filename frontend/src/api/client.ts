@@ -3,17 +3,13 @@ import axios from 'axios';
 // Define the API base URL
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8081';
 
-// Define types based on backend API
+// Define types based on backend API - matching the curl example structure
 export interface CrawlRequest {
   url: string;
   keywords: string[];
-  max_depth?: number;
-  max_time_seconds?: number;
-  follow_pagination?: boolean;
   max_pages?: number;
-  date_from?: string; // ISO 8601 date string (YYYY-MM-DD)
-  date_to?: string;   // ISO 8601 date string (YYYY-MM-DD)
-  include_subdomains?: boolean; // Whether to crawl subdomains of the main domain
+  date_from?: string | null; // ISO 8601 date string (YYYY-MM-DD) or null
+  date_to?: string | null;   // ISO 8601 date string (YYYY-MM-DD) or null
 }
 
 export interface KeywordMatch {

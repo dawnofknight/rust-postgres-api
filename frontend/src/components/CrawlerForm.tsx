@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Box, Button, TextField, Typography, 
-  FormControlLabel, Checkbox, Slider 
+  Slider 
 } from '@mui/material';
 import type { CrawlRequest } from '../api/client';
 
@@ -13,13 +13,9 @@ interface CrawlerFormProps {
 export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
   const [url, setUrl] = useState('');
   const [keywords, setKeywords] = useState('');
-  const [maxDepth, setMaxDepth] = useState<number | undefined>(2);
-  const [maxTimeSeconds, setMaxTimeSeconds] = useState<number | undefined>(30);
-  const [followPagination, setFollowPagination] = useState(true);
-  const [maxPages, setMaxPages] = useState<number | undefined>(10);
+  const [maxPages, setMaxPages] = useState<number | undefined>(5);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [includeSubdomains, setIncludeSubdomains] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,13 +23,9 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
     const request: CrawlRequest = {
       url,
       keywords: keywords.split(',').map(k => k.trim()).filter(k => k !== ''),
-      max_depth: maxDepth,
-      max_time_seconds: maxTimeSeconds,
-      follow_pagination: followPagination,
       max_pages: maxPages,
-      date_from: dateFrom || undefined,
-      date_to: dateTo || undefined,
-      include_subdomains: includeSubdomains
+      date_from: dateFrom || null,
+      date_to: dateTo || null,
     };
     
     onSubmit(request);
@@ -45,14 +37,14 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
         <Box>
           <TextField
             fullWidth
-            label="Website URLs (comma separated)"
-            placeholder="https://example.com, https://another-site.com"
+            label="Website URL"
+            placeholder="https://www.newsnow.co.uk/h/"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             required
             variant="outlined"
             margin="normal"
-            helperText="Enter multiple URLs separated by commas"
+            helperText="Enter the website URL to crawl"
           />
         </Box>
 
@@ -60,7 +52,7 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
           <TextField
             fullWidth
             label="Keywords (comma separated)"
-            placeholder="keyword1, keyword2, keyword3"
+            placeholder="bangsamoro, keyword2, keyword3"
             value={keywords}
             onChange={(e) => setKeywords(e.target.value)}
             required
@@ -72,72 +64,16 @@ export default function CrawlerForm({ onSubmit, isLoading }: CrawlerFormProps) {
 
         <Box>
           <Typography gutterBottom>
-            Max Crawl Depth: {maxDepth}
-          </Typography>
-          <Slider
-            value={maxDepth || 0}
-            onChange={(_, value) => setMaxDepth(value as number)}
-            step={1}
-            marks
-            min={1}
-            max={5}
-            valueLabelDisplay="auto"
-          />
-        </Box>
-
-        <Box>
-          <Typography gutterBottom>
-            Max Time (seconds): {maxTimeSeconds}
-          </Typography>
-          <Slider
-            value={maxTimeSeconds || 0}
-            onChange={(_, value) => setMaxTimeSeconds(value as number)}
-            step={10}
-            marks
-            min={10}
-            max={3600}
-            valueLabelDisplay="auto"
-          />
-        </Box>
-
-        <Box>
-          <Typography gutterBottom>
             Max Pages: {maxPages}
           </Typography>
           <Slider
             value={maxPages || 0}
             onChange={(_, value) => setMaxPages(value as number)}
-            step={5}
+            step={1}
             marks
-            min={5}
-            max={50}
+            min={1}
+            max={20}
             valueLabelDisplay="auto"
-          />
-        </Box>
-
-        <Box>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={followPagination}
-                onChange={(e) => setFollowPagination(e.target.checked)}
-                color="primary"
-              />
-            }
-            label="Follow Pagination Links"
-          />
-        </Box>
-
-        <Box>
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={includeSubdomains}
-                onChange={(e) => setIncludeSubdomains(e.target.checked)}
-                color="primary"
-              />
-            }
-            label="Include Subdomains"
           />
         </Box>
 

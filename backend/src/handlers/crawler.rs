@@ -47,6 +47,7 @@ pub async fn crawl_website(
                 CrawlerError::SelectorError(e) => (StatusCode::BAD_REQUEST, format!("Selector error: {}", e)),
                 CrawlerError::TimeoutError => (StatusCode::OK, "Crawling exceeded the time limit".to_string()),
                 CrawlerError::DateParsingError(e) => (StatusCode::BAD_REQUEST, format!("Date parsing error: {}", e)),
+                CrawlerError::SpiderError(e) => (StatusCode::BAD_REQUEST, format!("Spider error: {}", e)),
                 CrawlerError::Other(e) => (StatusCode::BAD_REQUEST, format!("Other error: {}", e)),
             };
             

@@ -1,5 +1,5 @@
-use reqwest::Client;
-use scraper::{Html, Selector};
+use spider::website::Website;
+use spider::page::Page;
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -41,55 +41,38 @@ fn validate_date_range(date_from: Option<&String>, date_to: Option<&String>) -> 
     Ok((from_date, to_date))
 }
 
-// Helper function to extract date from HTML meta tags or structured data
-fn extract_page_dates(document: &Html) -> (Option<String>, Option<String>) {
+// Helper function to extract date from page content using Spider's Page struct
+fn extract_page_dates_from_spider_page(page: &Page) -> (Option<String>, Option<String>) {
+    let html_content = page.get_html();
+    
+    // Use regex to extract meta tags for dates
+    let meta_regex = Regex::new(r#"<meta[^>]*(?:property|name)="([^"]*)"[^>]*content="([^"]*)"[^>]*>"#).unwrap();
     let mut last_modified = None;
     let mut published_date = None;
     
-    // Try to extract from meta tags
-    if let Ok(meta_selector) = Selector::parse("meta") {
-        for meta in document.select(&meta_selector) {
-            if let Some(property) = meta.value().attr("property") {
-                match property {
-                    "article:modified_time" | "article:updated_time" => {
-                        if let Some(content) = meta.value().attr("content") {
-                            last_modified = Some(content.to_string());
-                        }
-                    }
-                    "article:published_time" => {
-                        if let Some(content) = meta.value().attr("content") {
-                            published_date = Some(content.to_string());
-                        }
-                    }
-                    _ => {}
-                }
-            }
+    for cap in meta_regex.captures_iter(&html_content) {
+        if let (Some(attr), Some(content)) = (cap.get(1), cap.get(2)) {
+            let attr_value = attr.as_str();
+            let content_value = content.as_str();
             
-            if let Some(name) = meta.value().attr("name") {
-                match name {
-                    "last-modified" | "date-modified" => {
-                        if let Some(content) = meta.value().attr("content") {
-                            last_modified = Some(content.to_string());
-                        }
-                    }
-                    "date" | "publish-date" | "publication-date" => {
-                        if let Some(content) = meta.value().attr("content") {
-                            published_date = Some(content.to_string());
-                        }
-                    }
-                    _ => {}
+            match attr_value {
+                "article:modified_time" | "article:updated_time" | "last-modified" | "date-modified" => {
+                    last_modified = Some(content_value.to_string());
                 }
+                "article:published_time" | "date" | "publish-date" | "publication-date" => {
+                    published_date = Some(content_value.to_string());
+                }
+                _ => {}
             }
         }
     }
     
     // Try to extract from time elements with datetime attribute
-    if let Ok(time_selector) = Selector::parse("time[datetime]") {
-        for time_elem in document.select(&time_selector) {
-            if let Some(datetime) = time_elem.value().attr("datetime") {
-                if published_date.is_none() {
-                    published_date = Some(datetime.to_string());
-                }
+    let time_regex = Regex::new(r#"<time[^>]*datetime="([^"]*)"[^>]*>"#).unwrap();
+    if published_date.is_none() {
+        if let Some(cap) = time_regex.captures(&html_content) {
+            if let Some(datetime) = cap.get(1) {
+                published_date = Some(datetime.as_str().to_string());
             }
         }
     }
@@ -97,116 +80,142 @@ fn extract_page_dates(document: &Html) -> (Option<String>, Option<String>) {
     (last_modified, published_date)
 }
 
-// Helper function to check if a page matches the date filter
-fn matches_date_filter(
-    last_modified: &Option<String>,
-    published_date: &Option<String>,
-    date_from: Option<NaiveDate>,
-    date_to: Option<NaiveDate>,
-) -> bool {
-    // If no date filter is specified, include all pages
-    if date_from.is_none() && date_to.is_none() {
-        return true;
+// Helper function to extract dates from page using proper Spider API
+fn extract_dates_from_page(page: &Page) -> Vec<String> {
+    let html = page.get_html();
+    
+    let mut dates = Vec::new();
+    
+    // Use regex to extract meta tags for dates
+    let meta_regex = Regex::new(r#"<meta[^>]*(?:property|name)="([^"]*)"[^>]*content="([^"]*)"[^>]*>"#).unwrap();
+    
+    for cap in meta_regex.captures_iter(&html) {
+        if let (Some(attr), Some(content)) = (cap.get(1), cap.get(2)) {
+            let attr_value = attr.as_str();
+            let content_value = content.as_str();
+            
+            if attr_value.contains("date") || attr_value.contains("time") {
+                dates.push(content_value.to_string());
+            }
+        }
     }
     
-    // Try to parse dates from the page
-    let page_dates = [last_modified, published_date]
-        .iter()
-        .filter_map(|date_opt| {
-            date_opt.as_ref().and_then(|date_str| {
-                // Try different date formats
-                DateTime::parse_from_rfc3339(date_str)
-                    .map(|dt| dt.date_naive())
-                    .or_else(|_| NaiveDate::parse_from_str(date_str, "%Y-%m-%d"))
-                    .or_else(|_| NaiveDate::parse_from_str(date_str, "%Y/%m/%d"))
-                    .ok()
-            })
-        })
-        .collect::<Vec<_>>();
-    
-    // If we couldn't parse any dates from the page, include it by default
-    if page_dates.is_empty() {
-        return true;
+    // Extract from time elements
+    let time_regex = Regex::new(r#"<time[^>]*datetime="([^"]*)"[^>]*>"#).unwrap();
+    for cap in time_regex.captures_iter(&html) {
+        if let Some(datetime) = cap.get(1) {
+            dates.push(datetime.as_str().to_string());
+        }
     }
     
-    // Check if any of the page dates fall within the specified range
-    page_dates.iter().any(|page_date| {
-        let after_from = date_from.map_or(true, |from| *page_date >= from);
-        let before_to = date_to.map_or(true, |to| *page_date <= to);
-        after_from && before_to
-    })
+    dates
 }
 
-// Add text cleaning functions
-fn clean_html_text(html_text: &str) -> String {
-    // Use html2text for better HTML-to-text conversion
-    let text = html2text::from_read(html_text.as_bytes(), 120);
+// Helper function to parse date from string
+fn parse_date(date_str: &str) -> Option<NaiveDate> {
+    DateTime::parse_from_rfc3339(date_str)
+        .map(|dt| dt.naive_utc().date())
+        .or_else(|_| NaiveDate::parse_from_str(date_str, "%Y-%m-%d"))
+        .or_else(|_| NaiveDate::parse_from_str(date_str, "%Y/%m/%d"))
+        .or_else(|_| NaiveDate::parse_from_str(date_str, "%m/%d/%Y"))
+        .ok()
+}
+
+// Helper function to check if a page matches the date filter
+fn matches_date_filter(
+    page_dates: &[String],
+    start_date: Option<&NaiveDate>,
+    end_date: Option<&NaiveDate>,
+) -> bool {
+    if start_date.is_none() && end_date.is_none() {
+        return true;
+    }
+
+    for date_str in page_dates {
+        if let Some(parsed_date) = parse_date(date_str) {
+            let date_matches = match (start_date, end_date) {
+                (Some(start), Some(end)) => parsed_date >= *start && parsed_date <= *end,
+                (Some(start), None) => parsed_date >= *start,
+                (None, Some(end)) => parsed_date <= *end,
+                (None, None) => true,
+            };
+            
+            if date_matches {
+                return true;
+            }
+        }
+    }
     
-    // Additional cleanup for better formatting
-    let text = text
+    false
+}
+
+fn clean_html_text(html_text: &str) -> String {
+    // Convert HTML to plain text
+    let plain_text = html2text::from_read(html_text.as_bytes(), 120);
+    
+    // Clean up extra whitespace and normalize line breaks
+    let cleaned = plain_text
         .lines()
         .map(|line| line.trim())
         .filter(|line| !line.is_empty())
-        .collect::<Vec<&str>>()
+        .collect::<Vec<_>>()
         .join("\n");
     
-    // Replace multiple newlines with single newlines
-    let re_newlines = Regex::new(r"\n{3,}").unwrap_or_else(|_| Regex::new(r"").unwrap());
-    let normalized_text = re_newlines.replace_all(&text, "\n\n").to_string();
-    
-    normalized_text.trim().to_string()
+    cleaned
 }
 
 fn calculate_relevance_score(keyword: &str, context: &str) -> f32 {
-    // Simple relevance scoring based on keyword density
-    let context_lower = context.to_lowercase();
     let keyword_lower = keyword.to_lowercase();
+    let context_lower = context.to_lowercase();
     
-    // Count occurrences
-    let count = context_lower.matches(&keyword_lower).count();
-    if count == 0 {
-        return 0.0;
-    }
+    // Count exact matches
+    let exact_matches = context_lower.matches(&keyword_lower).count() as f32;
     
-    // Calculate density (occurrences per 100 characters)
-    let density = (count as f32 * 100.0) / context.len() as f32;
+    // Calculate position bonus (earlier matches get higher scores)
+    let position_bonus = if let Some(pos) = context_lower.find(&keyword_lower) {
+        1.0 - (pos as f32 / context_lower.len() as f32)
+    } else {
+        0.0
+    };
     
-    // Check if keyword appears in the first third of the context (higher relevance)
-    let first_third_len = context.len() / 3;
-    let first_third = &context_lower[..first_third_len.min(context_lower.len())];
-    let position_boost = if first_third.contains(&keyword_lower) { 0.3 } else { 0.0 };
+    // Calculate density (matches per word)
+    let word_count = context.split_whitespace().count() as f32;
+    let density = if word_count > 0.0 { exact_matches / word_count } else { 0.0 };
     
-    // Combine factors (density has more weight)
-    let score = (density * 0.7) + position_boost;
-    
-    // Normalize to 0-1 range (capping at 1.0)
-    (score * 10.0).min(100.0)
+    // Combine factors
+    exact_matches + (position_bonus * 0.5) + (density * 2.0)
 }
 
 #[derive(Error, Debug)]
 pub enum CrawlerError {
     #[error("Request error: {0}")]
     RequestError(#[from] reqwest::Error),
-    
+
     #[error("Invalid URL: {0}")]
     UrlError(#[from] url::ParseError),
-    
+
     #[error("Selector error: {0}")]
     SelectorError(String),
-    
+
     #[error("Timeout error: Crawling exceeded the time limit")]
     TimeoutError,
-    
+
     #[error("Date parsing error: {0}")]
     DateParsingError(String),
-    
+
+    #[error("Spider error: {0}")]
+    SpiderError(String),
+
     #[error("Other error: {0}")]
     Other(String),
 }
 
+unsafe impl Send for CrawlerError {}
+unsafe impl Sync for CrawlerError {}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CrawlResult {
-    pub results: Vec<DomainResult>, // Changed to support multiple domains
+    pub results: Vec<DomainResult>,
     pub total_pages_crawled: usize,
     pub total_processing_time_ms: u64,
     pub crawl_timestamp: String,
@@ -216,12 +225,12 @@ pub struct CrawlResult {
 pub struct DomainResult {
     pub url: String,
     pub title: Option<String>,
-    pub content: String, // Full cleaned text content of the page
+    pub content: String,
     pub matches: Vec<KeywordMatch>,
     pub pages_crawled: usize,
     pub has_more_pages: bool,
     pub metadata: Option<CrawlMetadata>,
-    pub error: Option<String>, // To capture domain-specific errors
+    pub error: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -229,8 +238,8 @@ pub struct CrawlMetadata {
     pub crawl_timestamp: String,
     pub total_processing_time_ms: u64,
     pub content_summary: Option<String>,
-    pub last_modified: Option<String>, // ISO 8601 date string for page last modified date
-    pub published_date: Option<String>, // ISO 8601 date string for page published date
+    pub last_modified: Option<String>,
+    pub published_date: Option<String>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -240,44 +249,48 @@ pub struct KeywordMatch {
     pub cleaned_text: String,
     pub count: usize,
     pub relevance_score: Option<f32>,
-    pub source_url: String, // URL where this keyword match was found
+    pub source_url: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CrawlRequest {
-    pub url: String, // Can contain multiple URLs separated by commas
+    pub url: String,
     pub keywords: Vec<String>,
     pub max_depth: Option<usize>,
     pub max_time_seconds: Option<u64>,
     pub follow_pagination: Option<bool>,
     pub max_pages: Option<usize>,
-    pub date_from: Option<String>, // ISO 8601 date string (YYYY-MM-DD)
-    pub date_to: Option<String>,   // ISO 8601 date string (YYYY-MM-DD)
+    pub date_from: Option<String>,
+    pub date_to: Option<String>,
 }
 
 // Helper function to parse multiple URLs from comma-separated string
 fn parse_urls(url_string: &str) -> Result<Vec<Url>, CrawlerError> {
     let mut urls = Vec::new();
     
-    // Clean the input string by removing backticks and extra whitespace
-    let cleaned_input = url_string.trim().replace('`', "");
-    
-    for url_str in cleaned_input.split(',') {
-        let trimmed_url = url_str.trim();
+    for url_part in url_string.split(',') {
+        let trimmed_url = url_part.trim();
         if !trimmed_url.is_empty() {
-            // Additional validation to ensure the URL has a proper scheme
-            let url_to_parse = if !trimmed_url.starts_with("http://") && !trimmed_url.starts_with("https://") {
-                format!("https://{}", trimmed_url)
-            } else {
+            // Add protocol if missing
+            let full_url = if trimmed_url.starts_with("http://") || trimmed_url.starts_with("https://") {
                 trimmed_url.to_string()
+            } else {
+                format!("https://{}", trimmed_url)
             };
             
-            match Url::parse(&url_to_parse) {
+            match Url::parse(&full_url) {
                 Ok(parsed_url) => urls.push(parsed_url),
                 Err(e) => {
-                    // Log the error but continue processing other URLs
-                    eprintln!("Failed to parse URL '{}': {}", trimmed_url, e);
-                    continue;
+                    // Try with http:// if https:// failed
+                    if full_url.starts_with("https://") {
+                        let http_url = full_url.replace("https://", "http://");
+                        match Url::parse(&http_url) {
+                            Ok(parsed_url) => urls.push(parsed_url),
+                            Err(_) => return Err(CrawlerError::UrlError(e)),
+                        }
+                    } else {
+                        return Err(CrawlerError::UrlError(e));
+                    }
                 }
             }
         }
@@ -302,9 +315,9 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<CrawlResult, Crawle
     let mut domain_results = Vec::new();
     let mut total_pages_crawled = 0;
     
-    // Process each domain
+    // Process each domain using Spider
     for base_url in urls {
-        let domain_result = crawl_single_domain(&base_url, request, start_processing_time, date_from, date_to).await;
+        let domain_result = crawl_single_domain_with_spider(&base_url, request, start_processing_time, date_from, date_to).await;
         
         match domain_result {
             Ok(result) => {
@@ -342,118 +355,134 @@ pub async fn crawl_website(request: &CrawlRequest) -> Result<CrawlResult, Crawle
     })
 }
 
-async fn crawl_single_domain(
+async fn crawl_single_domain_with_spider(
     base_url: &Url,
     request: &CrawlRequest,
     start_processing_time: Instant,
     date_from: Option<NaiveDate>,
     date_to: Option<NaiveDate>,
 ) -> Result<DomainResult, CrawlerError> {
-    let client = Client::new();
-    
-    // Set up time tracking if max_time_seconds is specified
     let start_time = Instant::now();
     let time_limit = request.max_time_seconds.map(Duration::from_secs);
     
-    // Track visited URLs to avoid duplicates
-    let mut visited_urls = HashSet::new();
-    visited_urls.insert(base_url.to_string());
+    // Create Spider website instance
+    let mut website = Website::new(base_url.as_str());
     
-    // Initialize result
+    // Configure Spider based on request parameters
+    if let Some(max_pages) = request.max_pages {
+        website.configuration.budget = Some(spider::hashbrown::HashMap::from([
+            (spider::case_insensitive_string::CaseInsensitiveString::from("*"), max_pages as u32)
+        ]));
+    }
+    
+    if let Some(max_depth) = request.max_depth {
+        website.configuration.depth = max_depth;
+    }
+    
+    // Set request delay to be respectful
+    website.configuration.delay = 1000; // 1 second delay between requests
+    
+    // Enable subdomains if needed
+    website.configuration.subdomains = true;
+    
+    // Scrape the website to get pages with content
+    website.scrape().await;
+    
+    // Process the scraped pages
+    let pages = website.get_pages();
     let mut all_matches = Vec::new();
+    let mut full_content = String::new();
+    let mut page_title = None;
     let mut pages_crawled = 0;
     let mut has_more_pages = false;
-    let mut current_url = base_url.clone();
-    let mut page_title = None;
-    let mut full_content = String::new(); // Store all page content
     
-    // Set max pages to crawl
-    let max_pages = request.max_pages.unwrap_or(10);
-    
-    loop {
-        // Check if we've exceeded the time limit
-        if let Some(limit) = time_limit {
-            if start_time.elapsed() > limit {
-                has_more_pages = true;
-                break;
-            }
-        }
-        
-        // Check if we've reached the max pages
-        if pages_crawled >= max_pages {
-            has_more_pages = true;
-            break;
-        }
-        
-        // Fetch the webpage content
-        let response = client.get(current_url.clone()).send().await?;
-        let html_content = response.text().await?;
-        
-        // Parse the HTML
-        let document = Html::parse_document(&html_content);
-        
-        // Extract page dates for filtering
-        let (page_last_modified, page_published_date) = extract_page_dates(&document);
-        
-        // Check if the page matches the date filter
-        if !matches_date_filter(&page_last_modified, &page_published_date, date_from, date_to) {
-            // Skip this page if it doesn't match the date filter
-            pages_crawled += 1;
-            
-            // If pagination is not enabled, break after the first page
-            if !request.follow_pagination.unwrap_or(false) {
-                break;
-            }
-            
-            // Try to find pagination links and continue
-            if let Some(next_url) = find_next_page_url(&document, &current_url) {
-                if !visited_urls.contains(&next_url.to_string()) {
-                    visited_urls.insert(next_url.to_string());
-                    current_url = next_url;
-                    continue;
-                } else {
+    if let Some(pages) = pages {
+        for (index, page) in pages.iter().enumerate() {
+            // Check time limit
+            if let Some(limit) = time_limit {
+                if start_time.elapsed() > limit {
+                    has_more_pages = true;
                     break;
                 }
-            } else {
-                break;
+            }
+            
+            // Extract page dates for filtering
+            let page_dates = extract_dates_from_page(page);
+            
+            // Check if the page matches the date filter
+            if !matches_date_filter(&page_dates, date_from.as_ref(), date_to.as_ref()) {
+                continue;
+            }
+            
+            // Extract title from the first matching page
+            if page_title.is_none() {
+                if let Some(metadata) = page.get_metadata() {
+                    if let Some(title) = &metadata.title {
+                        page_title = Some(title.to_string());
+                    }
+                }
+            }
+            
+            // Process page content for keyword matches
+            let html_content = page.get_html();
+            let cleaned_content = clean_html_text(&html_content);
+            
+            // Add to full content
+            if !full_content.is_empty() {
+                full_content.push_str("\n\n--- Next Page ---\n\n");
+            }
+            full_content.push_str(&cleaned_content);
+            
+            // Search for keywords in the cleaned content
+            for keyword in &request.keywords {
+                let keyword_lower = keyword.to_lowercase();
+                let content_lower = cleaned_content.to_lowercase();
+                
+                if content_lower.contains(&keyword_lower) {
+                    let count = content_lower.matches(&keyword_lower).count();
+                    
+                    // Extract context around keyword matches
+                    let words: Vec<&str> = cleaned_content.split_whitespace().collect();
+                    let mut contexts = Vec::new();
+                    
+                    for (i, word) in words.iter().enumerate() {
+                        if word.to_lowercase().contains(&keyword_lower) {
+                            let start = i.saturating_sub(5);
+                            let end = std::cmp::min(i + 6, words.len());
+                            let context = words[start..end].join(" ");
+                            contexts.push(context);
+                        }
+                    }
+                    
+                    for context in contexts {
+                        let relevance_score = calculate_relevance_score(keyword, &context);
+                        
+                        all_matches.push(KeywordMatch {
+                            keyword: keyword.clone(),
+                            context: context.clone(),
+                            cleaned_text: context,
+                            count,
+                            relevance_score: Some(relevance_score),
+                            source_url: page.get_url().to_string(),
+                        });
+                    }
+                }
+            }
+            
+            pages_crawled += 1;
+            
+            // Check if we've reached max pages
+            if let Some(max_pages) = request.max_pages {
+                if pages_crawled >= max_pages {
+                    has_more_pages = index + 1 < pages.len();
+                    break;
+                }
             }
         }
         
-        // Extract title (only for the first page that matches the filter)
-        if all_matches.is_empty() {
-            let title_selector = Selector::parse("title").map_err(|e| CrawlerError::SelectorError(e.to_string()))?;
-            page_title = document.select(&title_selector).next().map(|element| element.inner_html());
-        }
-        
-        // Process the current page
-        let page_content = process_page_content(&html_content, &request.keywords, &mut all_matches, time_limit, start_time, &current_url)?;
-        
-        // Extract and accumulate full page content
-        let cleaned_page_content = clean_html_text(&html_content);
-        if !full_content.is_empty() {
-            full_content.push_str("\n\n--- Next Page ---\n\n");
-        }
-        full_content.push_str(&cleaned_page_content);
-        
-        pages_crawled += 1;
-        
-        // If pagination is not enabled, break after the first page
-        if !request.follow_pagination.unwrap_or(false) {
-            break;
-        }
-        
-        // Try to find pagination links
-        if let Some(next_url) = find_next_page_url(&document, &current_url) {
-            if !visited_urls.contains(&next_url.to_string()) {
-                visited_urls.insert(next_url.to_string());
-                current_url = next_url;
-            } else {
-                // We've already visited this URL, so we're in a loop
-                break;
-            }
-        } else {
-            // No more pagination links found
-            break;
+        // Check if there were more pages available than we processed
+        if let Some(max_pages) = request.max_pages {
+            has_more_pages = has_more_pages || pages.len() > max_pages;
         }
     }
     
@@ -463,22 +492,16 @@ async fn crawl_single_domain(
         .unwrap_or_else(|_| Duration::from_secs(0))
         .as_secs();
     
-    // Get the last extracted page dates (from the last processed page)
-    let (last_modified, published_date) = if !all_matches.is_empty() {
-        // If we have matches, we should have processed at least one page
-        // For now, we'll use None as we need to track dates per page
-        // TODO: Implement proper date tracking across multiple pages
-        (None, None)
-    } else {
-        (None, None)
-    };
-    
     let metadata = CrawlMetadata {
         crawl_timestamp: format!("{}", timestamp),
         total_processing_time_ms: start_processing_time.elapsed().as_millis() as u64,
-        content_summary: page_title.clone(),
-        last_modified,
-        published_date,
+        content_summary: if full_content.len() > 500 {
+            Some(format!("{}...", &full_content[..500]))
+        } else {
+            Some(full_content.clone())
+        },
+        last_modified: None, // Could be extracted from first page if needed
+        published_date: None, // Could be extracted from first page if needed
     };
     
     Ok(DomainResult {
@@ -491,119 +514,4 @@ async fn crawl_single_domain(
         metadata: Some(metadata),
         error: None,
     })
-}
-
-fn process_page_content(
-    html_content: &str,
-    keywords: &[String],
-    all_matches: &mut Vec<KeywordMatch>,
-    time_limit: Option<Duration>,
-    start_time: Instant,
-    current_url: &Url,
-) -> Result<Option<String>, CrawlerError> {
-    let html_lowercase = html_content.to_lowercase();
-    let mut title = None;
-    
-    // Extract title if this is the first page
-    if all_matches.is_empty() {
-        let document = Html::parse_document(html_content);
-        let title_selector = Selector::parse("title").map_err(|e| CrawlerError::SelectorError(e.to_string()))?;
-        title = document.select(&title_selector).next().map(|element| element.inner_html());
-    }
-    
-    for keyword in keywords {
-        // Check if we've exceeded the time limit
-        if let Some(limit) = time_limit {
-            if start_time.elapsed() > limit {
-                return Err(CrawlerError::TimeoutError);
-            }
-        }
-        
-        let keyword_lowercase = keyword.trim().to_lowercase();
-        let count = html_lowercase.matches(&keyword_lowercase).count();
-        
-        if count > 0 {
-            // Extract all contexts around the keyword
-            let mut contexts = Vec::new();
-            for (i, _) in html_lowercase.match_indices(&keyword_lowercase) {
-                // Check time limit again during processing
-                if let Some(limit) = time_limit {
-                    if start_time.elapsed() > limit {
-                        // If we hit the time limit, return what we have so far
-                        let context = "Time limit reached during processing".to_string();
-                        let cleaned_text = clean_html_text(&context);
-                        
-                        all_matches.push(KeywordMatch {
-                            keyword: keyword.clone(),
-                            context,
-                            cleaned_text,
-                            count,
-                            relevance_score: Some(0.0),
-                            source_url: current_url.to_string(),
-                        });
-                        
-                        return Err(CrawlerError::TimeoutError);
-                    }
-                }
-                
-                let start = if i > 50 { i - 50 } else { 0 };
-                let end = if i + keyword.len() + 50 < html_content.len() {
-                    i + keyword.len() + 50
-                } else {
-                    html_content.len()
-                };
-                
-                let context = html_content[start..end].to_string();
-                contexts.push(context);
-            }
-            
-            // Include all contexts instead of just the first one
-            let context = if !contexts.is_empty() {
-                contexts.join("\n...\n")
-            } else {
-                "".to_string()
-            };
-            
-            // Clean the text and calculate relevance score
-            let cleaned_text = clean_html_text(&context);
-            let relevance_score = calculate_relevance_score(keyword, &context);
-            
-            all_matches.push(KeywordMatch {
-                keyword: keyword.clone(),
-                context,
-                cleaned_text,
-                count,
-                relevance_score: Some(relevance_score),
-                source_url: current_url.to_string(),
-            });
-        }
-    }
-    
-    Ok(title)
-}
-
-fn find_next_page_url(document: &Html, current_url: &Url) -> Option<Url> {
-    // Common pagination selectors
-    let pagination_selectors = [
-        "a.next", "a.pagination-next", "a[rel='next']", 
-        "a:contains('Next')", "a:contains('next')", 
-        "a:contains('»')", "a.pagination__next", 
-        "li.next a", "div.pagination a:last-child",
-        ".pagination a[aria-label='Next']"
-    ];
-    
-    for selector_str in pagination_selectors {
-        if let Ok(selector) = Selector::parse(selector_str) {
-            if let Some(next_link) = document.select(&selector).next() {
-                if let Some(href) = next_link.value().attr("href") {
-                    // Convert relative URL to absolute
-                    if let Ok(next_url) = current_url.join(href) {
-                        return Some(next_url);
-                    }
-                }
-            }
-        }
-    }
-    
-    None
 }

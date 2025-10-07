@@ -20,3 +20,4 @@ html2text = "0.6.0"
 rdkafka = { version = "0.36", features = ["tokio"] }
 scylla = "0.13"
 uuid = { version = "1.7", features = ["v4", "serde"] }
+spider = { path = "../spider/spider" }
