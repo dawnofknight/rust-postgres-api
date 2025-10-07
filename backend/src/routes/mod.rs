@@ -15,7 +15,8 @@ pub fn create_routes(state: CassandraState) -> Router {
         // .route("/users/{id}", get(handlers::get_user_by_id))
         // .route("/users/{id}", put(handlers::update_user))
         // .route("/users/{id}", delete(handlers::delete_user))
-        .route("/crawl", post(handlers::crawl_website_handler)) // Social media proxy endpoints
+        .route("/crawl", post(handlers::crawl_website))
+        // Social media proxy endpoints
         .route("/social/tikhub/generic", post(handlers::proxy_tikhub_generic))
         .route("/social/tikhub/twitter", post(handlers::proxy_tikhub_twitter))
         .route("/social/tikhub/tiktok", post(handlers::proxy_tikhub_tiktok))
